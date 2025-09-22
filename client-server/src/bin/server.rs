@@ -13,7 +13,7 @@ use nix::{
     unistd::{close, fork, ForkResult},
 };
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use std::fs;
+use std::{env, fs, process};
 use serde::Deserialize;
 use Signal::SIGCHLD;
 
@@ -27,12 +27,11 @@ struct CaesMsg {
     shift_val: String,
 }
 
-const SOCKET_PATH: &str = "/tmp/mysocket";
-const SHIFT: u32 = 3;
-
 fn main() {
 
-    let sock = create_socket();
+    let socket_path = parse_args();
+
+    let sock = create_socket(&socket_path);
 
     listen_for_connections(&sock);
 
@@ -52,7 +51,7 @@ fn main() {
 
                 let incoming = receive_message(&session_sock);
 
-                let shift: u32 = incoming.shift_val.parse().unwrap_or(SHIFT);
+                let shift: i32 = incoming.shift_val.parse().unwrap();
                 let msg = encrypt_message(incoming.message.as_bytes(), shift);
 
                 send_message(&session_sock, &msg);
@@ -65,13 +64,24 @@ fn main() {
     }
 }
 
-fn create_socket() -> OwnedFd {
+fn parse_args() -> String {
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        eprintln!("usage: server socket_path");
+        process::exit(1);
+    }
+
+    let socket_path = args[1].clone();
+    socket_path
+}
+
+fn create_socket(path: &str) -> OwnedFd {
     let sock = socket(AddressFamily::Unix, SockType::Stream, SockFlag::empty(), None)
         .expect("create_socket: failed to create socket");
 
-    let _ = fs::remove_file(SOCKET_PATH);
+    let _ = fs::remove_file(path);
 
-    let sockaddr = UnixAddr::new(SOCKET_PATH.as_bytes()).expect("bad socket path");
+    let sockaddr = UnixAddr::new(path.as_bytes()).expect("bad socket path");
     bind(sock.as_raw_fd(), &sockaddr).expect("server: bind failed");
 
     sock
@@ -106,9 +116,9 @@ fn receive_message(sock: &OwnedFd) -> CaesMsg {
     serde_json::from_slice(data).expect("server: failed to parse JSON")
 }
 
-fn encrypt_message(msg: &[u8], shift: u32) -> Vec<u8> {
+fn encrypt_message(msg: &[u8], shift: i32) -> Vec<u8> {
     let mut result = Vec::new();
-    let shiftby = (shift % 26) as u8;
+    let shiftby = ((shift % 26 + 26) % 26) as u8;
 
     for c in msg {
         if c.is_ascii_whitespace() {

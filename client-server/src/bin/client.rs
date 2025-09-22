@@ -27,7 +27,7 @@ fn main() {
     let sock = create_socket();
 
     connect_to_server(&sock, &*sock_path);
- 
+
     send_message(&sock, &client_msg);
 
     let mut buf = vec![0; client_msg.message.len()];
@@ -81,9 +81,9 @@ fn receive_message(sock: &OwnedFd, buf: &mut [u8]){
     println!("Received {} bytes", bytes_read);
 }
 
-fn decrypt_message(msg: &[u8], shift: u32) -> Vec<u8> {
+fn decrypt_message(msg: &[u8], shift: i32) -> Vec<u8> {
     let mut result = Vec::new();
-    let shiftby = 26 - ((shift % 26) as u8);
+    let shiftby = 26 - ((shift % 26 + 26) % 26) as u8;
 
     for c in msg {
         if c.is_ascii_whitespace() {
