@@ -17,16 +17,21 @@ use std::{env, fs, process};
 use serde::Deserialize;
 use Signal::SIGCHLD;
 
+///sighandler to handle child processes
 extern "C" fn sigchld_handler(_signal: libc::c_int) {
     while let Ok(WaitStatus::StillAlive) = waitpid(None, Some(WaitPidFlag::WNOHANG)) {}
 }
 
+///struct used to deserialize message from the client
 #[derive(Deserialize)]
 struct CaesMsg {
     message: String,
     shift_val: String,
 }
 
+/**
+main function to act as the driver for the server
+**/
 fn main() {
 
     let socket_path = parse_args();
@@ -64,6 +69,9 @@ fn main() {
     }
 }
 
+/**
+function used to parse command line arguments
+**/
 fn parse_args() -> String {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
@@ -75,6 +83,9 @@ fn parse_args() -> String {
     socket_path
 }
 
+/**
+function used to create domain socket
+**/
 fn create_socket(path: &str) -> OwnedFd {
     let sock = socket(AddressFamily::Unix, SockType::Stream, SockFlag::empty(), None)
         .expect("create_socket: failed to create socket");
@@ -87,11 +98,17 @@ fn create_socket(path: &str) -> OwnedFd {
     sock
 }
 
+/**
+function to listen for clients
+**/
 fn listen_for_connections(sock: &OwnedFd) {
     let backlog = Backlog::new(10).unwrap();
     listen(sock, backlog).expect("server listen failed");
 }
 
+/**
+function used to accept clients
+**/
 fn accept_client(sock: &OwnedFd) -> OwnedFd {
     loop {
         match accept(sock.as_raw_fd()) {
@@ -107,6 +124,9 @@ fn accept_client(sock: &OwnedFd) -> OwnedFd {
     }
 }
 
+/**
+function used to get message struct from the client
+**/
 fn receive_message(sock: &OwnedFd) -> CaesMsg {
     let mut buf = [0u8; 1024];
     let nbytes = recv(sock.as_raw_fd(), &mut buf, MsgFlags::empty())
@@ -116,6 +136,9 @@ fn receive_message(sock: &OwnedFd) -> CaesMsg {
     serde_json::from_slice(data).expect("server: failed to parse JSON")
 }
 
+/**
+function used to apply caesar cypher based on shift val to message
+**/
 fn encrypt_message(msg: &[u8], shift: i32) -> Vec<u8> {
     let mut result = Vec::new();
     let shiftby = ((shift % 26 + 26) % 26) as u8;
@@ -139,10 +162,16 @@ fn encrypt_message(msg: &[u8], shift: i32) -> Vec<u8> {
     result
 }
 
+/**
+function used to send message to client
+**/
 fn send_message(sock: &OwnedFd, msg: &[u8]) {
     send(sock.as_raw_fd(), msg, MsgFlags::empty()).expect("server: send failed");
 }
 
+/**
+function to close socket 
+**/
 fn close_socket(sock: &OwnedFd) {
     close(sock.as_raw_fd()).expect("server: close failed");
 }

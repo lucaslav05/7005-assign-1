@@ -10,12 +10,16 @@ use std::path::Path;
 use std::{env, process};
 use serde::Serialize;
 
+///Struct to store message and shift value to send to server
 #[derive(Serialize)]
 struct CaesMsg {
     message: String,
     shift_val: String,
 }
 
+/**
+Main function to act as the driver for the client
+**/
 fn main() {
     let (sock_path, msg, shift) = parse_args();
 
@@ -42,6 +46,9 @@ fn main() {
     close_socket(sock);
 }
 
+/**
+function used to parse command line arguments
+**/
 fn parse_args() -> (String, String, String) {
     let args: Vec<String> = env::args().collect();
     if args.len() != 4 {
@@ -57,17 +64,26 @@ fn parse_args() -> (String, String, String) {
     (socket_path, message, shift_val)
 }
 
+/**
+function to create domain socket
+**/
 fn create_socket() -> OwnedFd {
     socket(AddressFamily::Unix, SockType::Stream, SockFlag::empty(), None)
         .expect("create_socket: failed to create socket")
 }
 
+/**
+function to connect to the server using the network socket
+**/
 fn connect_to_server(sock: &OwnedFd, path: &str) {
     let sock_addr = UnixAddr::new(Path::new(path))
         .expect("connect_to_server: invalid socket path");
     connect(sock.as_raw_fd(), &sock_addr).expect("connect_to_server: connect failed");
 }
 
+/**
+function to send message struct to server
+**/
 fn send_message(sock: &OwnedFd, msg: &CaesMsg) {
     let bytes = serde_json::to_vec(msg).expect("Failed to serialize message");
     let bytes_sent = send(sock.as_raw_fd(), &bytes, MsgFlags::empty())
@@ -75,12 +91,18 @@ fn send_message(sock: &OwnedFd, msg: &CaesMsg) {
     println!("Sent {} bytes", bytes_sent);
 }
 
+/**
+function to receive message from the server
+**/
 fn receive_message(sock: &OwnedFd, buf: &mut [u8]){
     let bytes_read = recv(sock.as_raw_fd(), buf, MsgFlags::empty())
         .expect("send_message: send failed");
     println!("Received {} bytes", bytes_read);
 }
 
+/**
+Function used to reverse the encryption applied to the message by shifting by 26 - shift value
+**/
 fn decrypt_message(msg: &[u8], shift: i32) -> Vec<u8> {
     let mut result = Vec::new();
     let shiftby = 26 - ((shift % 26 + 26) % 26) as u8;
@@ -104,6 +126,9 @@ fn decrypt_message(msg: &[u8], shift: i32) -> Vec<u8> {
     result
 }
 
+/**
+function used to close socket 
+**/
 fn close_socket(sock: OwnedFd) {
     close(sock).expect("close_socket: failed to close socket");
 }
